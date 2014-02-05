@@ -18,24 +18,23 @@
 
 package org.glite.wms.wmproxy;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.StringReader;
 import java.net.URL;
+import java.security.KeyStoreException;
 import java.security.PrivateKey;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Vector;
+import java.util.Properties;
 
 import org.apache.axis2.AxisFault;
+import org.apache.commons.httpclient.protocol.Protocol;
 import org.apache.log4j.Logger;
-import org.bouncycastle.jce.PKCS10CertificationRequest;
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.glite.wms.wmproxy.ws.WMProxyStub;
 import org.glite.wms.wmproxy.ws.AuthenticationFaultException;
 import org.glite.wms.wmproxy.ws.WMProxyStub.EnableFilePerusal;
@@ -70,6 +69,12 @@ import org.gridsite.www.namespaces.delegation_2.WMProxyStub.GetNewProxyReq;
 import org.gridsite.www.namespaces.delegation_2.WMProxyStub.GetServiceMetadata;
 import org.gridsite.www.namespaces.delegation_2.WMProxyStub.GetTerminationTime;
 import org.gridsite.www.namespaces.delegation_2.WMProxyStub.RenewProxyReq;
+
+import eu.emi.security.authn.x509.impl.CertificateUtils;
+import eu.emi.security.authn.x509.impl.PEMCredential;
+import eu.emi.security.authn.x509.proxy.ProxyGenerator;
+import eu.emi.security.authn.x509.proxy.ProxyRequestOptions;
+import eu.emi.security.canl.axis2.CANLAXIS2SocketFactory;
 
 /**
  * Allows sending requests to the Workload Manager Proxy (WMProxy) server
@@ -107,8 +112,8 @@ public class WMProxyAPI {
 
     private URL serviceURL = null;
 
-    private String proxyPEM = null;
-
+    private PEMCredential pemCredential = null;
+    
     private String certsPath = null;
 
     private WMProxyStub serviceStub = null;
@@ -130,15 +135,14 @@ public class WMProxyAPI {
      *             in case of any error with the user proxy file
      */
     public WMProxyAPI(String url, String proxyFile) throws ServiceException, ServiceURLException {
-
-        FileInputStream proxyStream = null;
-        try {
-            proxyStream = new FileInputStream(proxyFile);
-        } catch (FileNotFoundException e) {
-            logger.error("Failed retrieving proxy from path:" + e.toString());
-        }
-        certsPath = "";
-        this.WMProxyAPIConstructor(url, proxyStream, certsPath);
+    	
+    	File proxy = new File(proxyFile);
+    	
+    	if(!proxy.exists())
+            logger.error("Failed retrieving proxy from path: File not exists.");
+        
+        certsPath = "/etc/grid-security/certificates";
+        this.WMProxyAPIConstructor(url, proxyFile, certsPath);
 
     }
 
@@ -160,53 +164,17 @@ public class WMProxyAPI {
      */
     public WMProxyAPI(String url, String proxyFile, String certsPath)
         throws ServiceException, ServiceURLException {
-        FileInputStream proxyStream = null;
-        try {
-            proxyStream = new FileInputStream(proxyFile);
-        } catch (FileNotFoundException e) {
-            logger.error("Failed retrieving proxy from path:" + e.toString());
-        }
-        this.WMProxyAPIConstructor(url, proxyStream, certsPath);
-    }
-
-    /**
-     * Constructor
-     * 
-     * @param url
-     *            WMProxy service URL
-     * @param proxyFile
-     *            the proxy in input as a stream
-     * @throws ServiceException
-     *             If any error in calling the service
-     * @throws CredentialException
-     *             in case of any error with the user proxy file
-     * @throws ServiceURLException
-     *             malformed service URL specified as input
-     */
-    public WMProxyAPI(String url, InputStream proxyFile)
-        throws ServiceException, ServiceURLException {
-        String certsPath = "";
-        this.WMProxyAPIConstructor(url, proxyFile, certsPath);
-    }
-
-    /**
-     * Constructor that allows setting of the Log4j tool by configuration file
-     * 
-     * @param url
-     *            WMProxy service URL
-     * @param proxyFile
-     *            the proxy in input as a stream
-     * @param logPropFille
-     *            the path location of the log4j properties file
-     * @throws ServiceException
-     *             If any error in calling the service
-     * @throws CredentialException
-     *             in case of any error with the user proxy file
-     * @throws ServiceURLException
-     *             malformed service URL specified as input
-     */
-    public WMProxyAPI(String url, InputStream proxyFile, String certsPath)
-        throws ServiceException, ServiceURLException {
+    	
+    	File proxy = new File(proxyFile);
+    	
+    	if(!proxy.exists())
+            logger.error("Failed retrieving proxy from path: File not exists.");
+    	
+    	File caFolder = new File(certsPath);
+    	
+    	if(!caFolder.exists())
+            logger.error("Failed retrieving CA certificates from path: Folder not exists.");
+    	
         this.WMProxyAPIConstructor(url, proxyFile, certsPath);
     }
 
@@ -226,10 +194,10 @@ public class WMProxyAPI {
      * @throws ServiceURLException
      *             malformed service URL specified as input
      */
-    private void WMProxyAPIConstructor(String url, InputStream proxyFile, String certsPath)
+    private void WMProxyAPIConstructor(String url, String proxyFile, String certsPath)
         throws ServiceException, ServiceURLException {
 
-        logger.debug("INPUT: url=[" + url + "] - proxyFile = [" + proxyFile.toString() + "] - certsPath=[" + certsPath
+        logger.debug("INPUT: url=[" + url + "] - proxyFile = [" + proxyFile + "] - certsPath=[" + certsPath
                 + "]");
         try {
             this.serviceURL = new URL(url);
@@ -238,22 +206,22 @@ public class WMProxyAPI {
         }
 
         try {
-            BufferedReader in = new BufferedReader(new InputStreamReader(proxyFile));
-            String s, s2 = new String();
-            while ((s = in.readLine()) != null)
-                s2 += s + "\n";
-            in.close();
-            String proxyString = s2;
-            this.proxyPEM = proxyString;
-        } catch (FileNotFoundException e) {
-            logger.error("Failed retrieving proxy:" + e.toString());
-        } catch (IOException ioe) {
-            logger.error("Failed reading proxy:" + ioe.toString());
-        }
-
+        	char[] emptyPwd = null;
+    		
+    		this.pemCredential = new PEMCredential(proxyFile, emptyPwd);
+    		
+		} catch (KeyStoreException e) {
+			logger.error("Failed retrieving proxy:" + e.toString());
+		} catch (CertificateException e) {
+			logger.error("Failed retrieving proxy:" + e.toString());
+		} catch (IOException e) {
+			logger.error("Failed reading proxy:" + e.toString());
+		}
         this.certsPath = certsPath;
 
         try {
+        	
+        	setSSLProperties(proxyFile);
 
             this.serviceStub = new WMProxyStub(serviceURL.toString());
 
@@ -263,6 +231,18 @@ public class WMProxyAPI {
             throw new ServiceException(fault.getMessage());
         }
 
+    }
+    
+    private void setSSLProperties(String proxy){
+    	
+    	Protocol.registerProtocol(this.serviceURL.getProtocol(), new Protocol(this.serviceURL.getProtocol(), new CANLAXIS2SocketFactory(), this.serviceURL.getPort()));
+    	
+    	Properties sslConfig = new Properties();
+    	sslConfig.put("truststore", this.certsPath);
+    	sslConfig.put("crlcheckingmode", "ifvalid");
+    	sslConfig.put("proxy", proxy);
+    	
+    	CANLAXIS2SocketFactory.setCurrentProperties(sslConfig);
     }
 
     /**
@@ -1982,46 +1962,28 @@ public class WMProxyAPI {
      *             in case of any error with the local user proxy
      */
 
-    private String createProxyfromCertReq(String certReq)
-        throws CredentialException {
-
-        int lifetime = 0;
-        X509Certificate[] parentCertChain = null;
-        PrivateKey userKey = null;
-
-        try {
-
-            FileCertReader certReader = new FileCertReader();
-            ByteArrayInputStream inStr = new ByteArrayInputStream(this.proxyPEM.getBytes());
-            BufferedInputStream buffInStr = new BufferedInputStream(inStr);
-            Vector<X509Certificate> vCerts = certReader.readCertChain(buffInStr);
-            parentCertChain = new X509Certificate[vCerts.size()];
-            vCerts.toArray(parentCertChain);
-            buffInStr.close();
-
-            inStr = new ByteArrayInputStream(this.proxyPEM.getBytes());
-            buffInStr = new BufferedInputStream(inStr);
-            userKey = PrivateKeyReader.read(buffInStr);
-
-            Date now = new Date();
-            lifetime = (int) (parentCertChain[0].getNotAfter().getTime() - now.getTime()) / 3600000;
-            if (lifetime < 0) {
-                throw new CredentialException("the local proxy has expired ");
+    private String createProxyfromCertReq(String certReq) throws CredentialException {
+    	try{
+    		
+            PrivateKey pKey = this.pemCredential.getKey();
+            
+            PEMParser pemParser = new PEMParser(new StringReader(certReq));
+            PKCS10CertificationRequest proxyReq = (PKCS10CertificationRequest) pemParser.readObject();
+            pemParser.close();
+            
+            ProxyRequestOptions csrOpt = new ProxyRequestOptions(this.pemCredential.getCertificateChain(), proxyReq);
+            
+            X509Certificate[] certChain = ProxyGenerator.generate(csrOpt, pKey);
+            
+            ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+            for (X509Certificate tmpcert : certChain) {
+                CertificateUtils.saveCertificate(outStream, tmpcert, CertificateUtils.Encoding.PEM);
             }
-
-            /*
-             * TODO PEM to DER conversion
-             */
-            byte[] derPKCS10 = null;
-            PKCS10CertificationRequest pkcs10 = new PKCS10CertificationRequest(derPKCS10);
-
-            ProxyCertificateGenerator generator = new ProxyCertificateGenerator(parentCertChain, pkcs10);
-            generator.setLifetime(lifetime);
-            generator.generate(userKey);
-            return generator.getProxyAsPEM();
-
-        } catch (Exception exc) {
-            throw new CredentialException(exc.getMessage());
+            
+            return outStream.toString();
+    		
+    	} catch (Exception e) {
+            throw new CredentialException(e.getMessage());
         }
 
     }
