@@ -40,6 +40,68 @@
 				</configuration>
 			</plugin>
 			<plugin>
+			    <groupId>com.googlecode.maven-download-plugin</groupId>
+			    <artifactId>maven-download-plugin</artifactId>
+			    <version>1.1.0</version>
+			    <executions>
+			        <execution>
+			            <id>download WMProxy.wsdl</id>
+			            <phase>generate-sources</phase>
+			            <goals>
+			                <goal>wget</goal>
+			            </goals>
+			            <configuration>
+			                <url>https://raw.github.com/italiangrid/org.glite.wms/master/org.glite.wms.interface/src/server/WMProxy.wsdl</url>
+			                <outputDirectory>target/generated-sources/wsdls/</outputDirectory>
+			            </configuration>
+			        </execution>
+			        <execution>
+			            <id>download WMProxy-gridsite-delegation-1.0.0.wsdl</id>
+			            <phase>generate-sources</phase>
+			            <goals>
+			                <goal>wget</goal>
+			            </goals>
+			            <configuration>
+			                <url>https://raw.github.com/italiangrid/org.glite.wms/master/org.glite.wms.interface/src/server/WMProxy-gridsite-delegation-1.0.0.wsdl</url>
+			                <outputDirectory>target/generated-sources/wsdls/</outputDirectory>
+			            </configuration>
+			        </execution>
+			        <execution>
+			            <id>download WMProxy-gridsite-delegation-2.0.0.wsdl</id>
+			            <phase>generate-sources</phase>
+			            <goals>
+			                <goal>wget</goal>
+			            </goals>
+			            <configuration>
+			                <url>https://raw.github.com/italiangrid/org.glite.wms/master/org.glite.wms.interface/src/server/WMProxy-gridsite-delegation-2.0.0.wsdl</url>
+			                <outputDirectory>target/generated-sources/wsdls/</outputDirectory>
+			            </configuration>
+			        </execution>
+			        <execution>
+			            <id>download jsdl-posix.xsd-6.xsd</id>
+			            <phase>generate-sources</phase>
+			            <goals>
+			                <goal>wget</goal>
+			            </goals>
+			            <configuration>
+			                <url>https://raw.github.com/italiangrid/org.glite.wms/master/org.glite.wms.interface/src/server/jsdl-posix.xsd-6.xsd</url>
+			                <outputDirectory>target/generated-sources/wsdls/</outputDirectory>
+			            </configuration>
+			        </execution>
+			        <execution>
+			            <id>download jsdl.xsd-18.xsd</id>
+			            <phase>generate-sources</phase>
+			            <goals>
+			                <goal>wget</goal>
+			            </goals>
+			            <configuration>
+			                <url>https://raw.github.com/italiangrid/org.glite.wms/master/org.glite.wms.interface/src/server/jsdl.xsd-18.xsd</url>
+			                <outputDirectory>target/generated-sources/wsdls/</outputDirectory>
+			            </configuration>
+			        </execution>
+			    </executions>
+			</plugin>
+			<plugin>
 				<groupId>org.apache.axis2</groupId>
 				<artifactId>axis2-wsdl2code-maven-plugin</artifactId>
 				<version>1.6.2</version>
@@ -52,7 +114,7 @@
 						</goals>
 						<configuration>
 							<packageName>org.glite.wms.wmproxy.ws</packageName>
-							<wsdlFile>src/main/resources/wsdls/WMProxy.wsdl</wsdlFile>
+							<wsdlFile>target/generated-sources/wsdls/WMProxy.wsdl</wsdlFile>
 							<databindingName>adb</databindingName>
 							<portName>WMProxy_PortType</portName>
 							<namespaceToPackages>http://glite.org/wms/wmproxy=org.glite.wms.wmproxy.ws,
@@ -67,7 +129,7 @@
 						</goals>
 						<configuration>
 							<packageName>org.gridsite.www.namespaces.delegation_2</packageName>
-							<wsdlFile>src/main/resources/wsdls/WMProxy.wsdl</wsdlFile>
+							<wsdlFile>target/generated-sources/wsdls/WMProxy.wsdl</wsdlFile>
 							<databindingName>adb</databindingName>
 							<portName>WMProxyDelegation2_PortType</portName>
 							<namespaceToPackages>http://glite.org/wms/wmproxy=org.glite.wms.wmproxy.ws,
@@ -96,14 +158,14 @@
 		<finalName>${artifactId}</finalName>
 	</build>
 	<repositories>
-       <repository>
-           <id>ci-01</id>
-           <name>ci-01</name>
-           <url>http://ci-01.cnaf.infn.it:8081/nexus/content/repositories/thirdparty/</url>
-           <snapshots>
-               <enabled>false</enabled>
-           </snapshots>
-       </repository>
+		<repository>
+			<id>ci-01</id>
+			<name>ci-01</name>
+			<url>http://ci-01.cnaf.infn.it:8081/nexus/content/repositories/thirdparty/</url>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+		</repository>
 	</repositories>
 	<dependencies>
 		<dependency>
