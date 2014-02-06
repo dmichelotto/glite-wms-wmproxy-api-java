@@ -95,6 +95,16 @@
 		</plugins>
 		<finalName>${artifactId}</finalName>
 	</build>
+	<repositories>
+       <repository>
+           <id>ci-01</id>
+           <name>ci-01</name>
+           <url>http://ci-01.cnaf.infn.it:8081/nexus/content/repositories/thirdparty/</url>
+           <snapshots>
+               <enabled>false</enabled>
+           </snapshots>
+       </repository>
+	</repositories>
 	<dependencies>
 		<dependency>
 			<groupId>log4j</groupId>
